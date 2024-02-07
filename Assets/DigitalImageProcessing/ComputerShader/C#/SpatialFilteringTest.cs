@@ -19,6 +19,16 @@ public class SpatialFilteringTest : MonoBehaviour
 
     private void Start()
     {
+        float[] r1 = new float[9] {1.0f,1.0f,1.0f,1.0f,-8.0f,1.0f,1.0f,1.0f,1.0f };
+        float[] laplacianK = new float[36];
+
+        for (int i = 0,a=0; i < r1.Length; i++,a+=4)
+        {
+            laplacianK[a] = r1[i];
+        }
+
+ 
+
         original.texture = texture;
 
         btn_GPU.onClick.AddListener(delegate
@@ -36,7 +46,7 @@ public class SpatialFilteringTest : MonoBehaviour
             rt_Laplacian.Create();
 
 
-
+            csSpatialFiltering.SetFloats(Shader.PropertyToID("lpKernel"), laplacianK);
 
             csSpatialFiltering.SetTexture(kernel_SF, Shader.PropertyToID("LaplacianLPF"), rt_Laplacian_kernel);
             csSpatialFiltering.SetTexture(kernel_SF, Shader.PropertyToID("Input"), texture);
@@ -47,6 +57,9 @@ public class SpatialFilteringTest : MonoBehaviour
             //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
             int kernel_KernelCreate = csSpatialFiltering.FindKernel("GaussianKernelCreate");
+
+            float[] gaussainK = new float[LPFSize*4];
+
 
             RenderTexture rt_Kernel = new RenderTexture(LPFSize, LPFSize, 32, RenderTextureFormat.ARGB32);
             rt_Kernel.enableRandomWrite = true;
