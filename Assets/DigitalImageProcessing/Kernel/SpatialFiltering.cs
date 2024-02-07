@@ -1777,6 +1777,7 @@ namespace DIP
 
             gaussianKernel = FSpecial(KernelType.gaussian, r, c, sig);
             sepreatKernels = Sepreate(gaussianKernel, out float sum);
+            //Debug.Log(sum);
 
 
             ////////////////////////Horizon 
@@ -1786,7 +1787,7 @@ namespace DIP
                 {
 
                     for (int i = -midr; i <= midr; i++)
-                    {
+                                                                                                                                                                                                                                                                                          {
                         if (m + i >= 0 && m + i <= paddingTex.width - 1)
                             horCol[m, n] += paddingTex.GetPixel(m + i, n) * sepreatKernels[0][i + midr];
                     }

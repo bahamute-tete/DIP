@@ -107,7 +107,7 @@ public class DiscreetFourierTransform : MonoBehaviour
         //     Vector2[,] f_glpf = GLPF_F(0.1f, P, Q);
         //     Vector2[,] f_blpf = BLPF_F(0.17f, n, P, Q);
 
-        //     Vector2[,] f_ihpf = IHPF_F(0.03f, P, Q);
+        //     Vector2[,] f_ihpf = IHPF_F(0.03f, P, Q);c
         //     Vector2[,] f_ghpf = GHPF_F(0.05f, P, Q);
         //     Vector2[,] f_bhpf = BHPF_F(0.117f, n, P, Q);
 
