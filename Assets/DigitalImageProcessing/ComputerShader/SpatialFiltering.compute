@@ -1,0 +1,261 @@
+//#pragma except_renderers d3d9
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel GaussianKernelCreate
+#pragma kernel SpatialFiltering
+#pragma kernel SpatialFilteringH
+#pragma kernel SpatialFilteringV
+
+#pragma kernel SpatialFilteringBufferDataH
+#pragma kernel SpatialFilteringBufferDataV
+
+#define PI 3.1415926535897932384626433832795
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+Texture2D<float4> Input;
+
+RWTexture2D<float4> KernelHor;
+RWTexture2D<float4> KernelVer;
+
+RWTexture2D<float4> LPF;
+RWTexture2D<float4> LaplacianLPF;
+int kernelSize;
+float kernelSum;
+
+RWTexture2D<float4> LaplacianResult;
+
+RWTexture2D<float4> FirstPass;
+RWTexture2D<float4> SecondPass;
+
+
+RWTexture2D<float> sumShow;
+
+RWBuffer<float> LPFH;
+RWBuffer<float> LPFV;
+
+
+
+
+float GaussianKernels(uint3 id,int kernelSize)
+{
+    int x = id.x;
+    int y = id.y;
+
+    int midr = (kernelSize - 1) * rcp(2);
+    int midc = (kernelSize - 1) *rcp(2);
+
+    //RWTexture2D<float4> LPF;
+
+    //float K = 1f / (2f * PI * Pow(sig, 2));
+    float K = 1.;
+
+    float sig = kernelSize / 6.0;
+
+    //float sig = 1.0;
+
+    float squareR = pow(x-midr, 2.) + pow(y-midc, 2.);
+    float factor = -squareR / (2. * pow(sig, 2.));
+    return K * exp(factor);
+}
+
+float BoxKernels(uint3 id,int kernelSize)
+{
+    return 1.;
+}
+
+/////////////////////////////////////////////////
+
+float KernelSum(RWTexture2D<float4> LPF,int kernelSize)
+{
+    float sum = 0.;
+    for(int i = 0; i < kernelSize; i++)
+    {
+        for(int j = 0; j < kernelSize; j++)
+        {
+            sum += LPF[int2(i,j)].x;
+        }
+    }
+    return sum;
+}
+
+void Sepreate(RWTexture2D<float4> LPF , out RWTexture1D<float4> KernelHor,out RWTexture1D<float4> KernelVer,int kernelSize)
+{
+
+
+    int midr = (kernelSize - 1) * rcp(2);
+    int midc = (kernelSize - 1) *rcp(2);
+
+    
+    for (int  x= 0; x <kernelSize ; x++)
+    {
+        KernelHor[x] = LPF[int2(x, midc)];
+    }
+
+    
+    for (int y = 0; y < kernelSize; y++)
+    {
+        KernelVer[y] = LPF[int2(midr, y)];
+    }
+}
+
+/////////////////////////////////////////////////
+
+float4 Blur(uint3 id,Texture2D<float4> Input,RWTexture2D<float4> LPF,int kernelSize,float kernelSum)
+{
+    float4 sum = float4(0,0,0,0);
+
+    int midr = (kernelSize - 1) * rcp(2);
+    int midc = (kernelSize - 1) *rcp(2);
+
+    for(int i = 0; i < kernelSize; i++)
+    {
+        for(int j = 0; j < kernelSize; j++)
+        {
+            sum += Input[id.xy-int2(i-midr,j-midc)] * LPF[int2(i,j)];
+            
+        }
+    }
+
+    return float4 ( sum.xyz / kernelSum,1.0);
+}
+/////////////////////////////////////////////////
+float4 BlurH(uint3 id,Texture2D<float4> Input,RWTexture2D<float4> KernelHor,int kernelSize,float kernelSum)
+{
+    float4 sum =0;
+
+
+    int mid = (kernelSize - 1) * rcp(2);
+
+    for(int j = 0; j < kernelSize; j++)
+    {
+        sum += Input[id.xy-int2(j-mid,0)] * (KernelHor[int2(j,0)]/sqrt(kernelSum));
+    }
+    
+    return float4 ( sum.xyz,1.0);
+}
+
+float4 BlurV(uint3 id,RWTexture2D<float4> Input,RWTexture2D<float4> KernelVer,int kernelSize,float kernelSum)
+{
+    float4 sum =0;
+
+
+    int mid = (kernelSize - 1) * rcp(2);
+
+    for(int j = 0; j < kernelSize; j++)
+    {
+        sum += Input[id.xy-int2(0,j-mid)] * (KernelVer[int2(0,j)]/sqrt(kernelSum));
+    }
+   
+
+    return float4 ( sum.xyz,1.0);
+}
+/////////////////////////////////////////////////////
+
+
+float4 LaplacianTex(uint3 id,Texture2D<float4> Input)
+{
+    float3x3 laplacianKernel =float3x3 ( 1.0, 1.0, 1.0,
+                                        1.0, -8.0,1.0,
+                                        1.0, 1.0, 1.0 );
+    float4 sum = float4(0,0,0,0);
+
+    for(int i = 0; i < 3; i++)
+    {
+        for(int j = 0; j < 3; j++)
+        {
+            sum += Input[id.xy-int2(i-1,j-1)] * laplacianKernel[i][j];
+        }
+    }
+
+    return float4 ( sum.xxx,1.0);
+
+}
+
+
+
+[numthreads(8,8,1)]
+void GaussianKernelCreate (uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    kernelSum =0;
+    int midr = (kernelSize - 1) * rcp(2);
+    int midc = (kernelSize - 1) *rcp(2);
+
+    float3 kernles=GaussianKernels(id,kernelSize);
+    LPF[id.xy]=float4(kernles,1.);
+
+    kernelSum =KernelSum(LPF,kernelSize);
+    sumShow[id.xy]=kernelSum;
+
+    KernelHor[int2(id.x,0)]=float4(LPF[int2(id.x, midc)].xyz,1.0);
+    KernelVer[int2(0,id.y)]=float4(LPF[int2(midr, id.y)].xyz,1.0);
+
+}
+
+
+[numthreads(8,8,1)]
+void SpatialFiltering (uint3 id : SV_DispatchThreadID)
+{
+    LaplacianResult[id.xy] = LaplacianTex(id,Input);
+}
+
+[numthreads(8,8,1)]
+void SpatialFilteringH (uint3 id : SV_DispatchThreadID)
+{
+    kernelSum =KernelSum(LPF,kernelSize);
+    FirstPass[id.xy] = BlurH(id,Input,KernelHor,kernelSize,kernelSum);
+}
+
+[numthreads(8,8,1)]
+void SpatialFilteringV (uint3 id : SV_DispatchThreadID)
+{
+    kernelSum =KernelSum(LPF,kernelSize);
+    SecondPass[id.xy] = BlurV(id,FirstPass,KernelVer,kernelSize,kernelSum);
+}
+
+[numthreads(8,8,1)]
+void SpatialFilteringBufferDataH (uint3 id : SV_DispatchThreadID)
+{
+
+
+    float4 sum =0;
+
+    kernelSum =KernelSum(LPF,kernelSize);
+
+
+    int mid = (kernelSize - 1) * rcp(2);
+
+    for(int m = 0; m < kernelSize; m++)
+    {
+        sum += Input[id.xy-int2(m-mid,0)] * (LPFH[m]/sqrt(kernelSum));
+    }
+    SecondPass[id.xy] =float4(sum.xyz,1.0);
+
+}
+
+[numthreads(8,8,1)]
+void SpatialFilteringBufferDataV (uint3 id : SV_DispatchThreadID)
+{
+
+
+    float4 sum =0;
+
+
+    kernelSum =KernelSum(LPF,kernelSize);
+
+
+    int mid = (kernelSize - 1) * rcp(2);
+
+    
+
+
+    for(int j = 0; j < kernelSize; j++)
+    {
+        sum+=SecondPass[id.xy-int2(0,j-mid)]*(LPFV[j]/sqrt(kernelSum));
+    }
+
+    SecondPass[id.xy] = float4(sum.xyz,1.0);
+}
+
+
+
+
