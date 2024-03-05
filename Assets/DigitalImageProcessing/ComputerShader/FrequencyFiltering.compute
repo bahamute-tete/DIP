@@ -62,22 +62,23 @@ float2 DataConvert(Texture2D<float4> input,uint3 id,bool isShift =false)
 void DFT (uint3 id:SV_DispatchThreadID)
 {
     //float2 res = float2(DataConvert(input,id));
-    for(int v =0,v<32,v++)
+    float2 complex = 0;
+    for(int v =0;v<32;v++)
     {
         for (int u = 0 ;u <32;u++)
         {
-             float2 complex = 0;
              float  c = Rgb2Luminance(input,id);
-             float w = -2.0*PI * (u + id.x/32.0+v*id.y/32.0);
+             float w = -2.0*PI * (u * id.x/32+v*id.y/32);
              float2 ex = float2(cos(w),sin(w));
              complex += c * ex;
 
         }
     }
    
+    float fc = 1.0 / 32.0 *length(complex);
+    //float cc = 50.0 * log(1.0 + abs(fc));
 
-
-    Result[id.xy] =res;
+    Result[id.xy] =float4(fc,fc,fc,1.0);
 
 }
 
